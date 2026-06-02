@@ -143,22 +143,23 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
 
     if (existingRowIndex >= 0) {
       const rowNumber = existingRowIndex + 2;
-      const currentRow = rows[existingRowIndex + 1] ?? [];
-      const values = this.mergeDataIntoExistingRow(
+      const updateRanges = this.mapDataToUpdateRanges(
+        escapedSheetName,
+        rowNumber,
         headers,
-        currentRow,
         input.data,
         input.keyValue,
       );
 
-      await this.sheets.spreadsheets.values.update({
-        spreadsheetId: this.spreadsheetId,
-        range: `${escapedSheetName}!A${rowNumber}:${this.columnName(headers.length)}${rowNumber}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [values],
-        },
-      });
+      if (updateRanges.length > 0) {
+        await this.sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: this.spreadsheetId,
+          requestBody: {
+            valueInputOption: 'USER_ENTERED',
+            data: updateRanges,
+          },
+        });
+      }
 
       return { action: 'updated', rowNumber };
     }
@@ -214,23 +215,29 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     );
   }
 
-  private mergeDataIntoExistingRow(
+  private mapDataToUpdateRanges(
+    sheetName: string,
+    rowNumber: number,
     headers: string[],
-    currentRow: SheetCellValue[],
     data: Record<string, SheetCellValue>,
     identifier: SheetCellValue,
-  ): SheetCellValue[] {
-    return headers.map((header, index) => {
+  ): sheets_v4.Schema$ValueRange[] {
+    return headers.reduce<sheets_v4.Schema$ValueRange[]>((ranges, header, index) => {
       if (this.isProtectedHeader(header, identifier)) {
-        return currentRow[index] ?? '';
+        return ranges;
       }
 
       if (Object.prototype.hasOwnProperty.call(data, header)) {
-        return data[header] ?? '';
+        const columnName = this.columnName(index + 1);
+
+        ranges.push({
+          range: `${sheetName}!${columnName}${rowNumber}`,
+          values: [[data[header] ?? '']],
+        });
       }
 
-      return currentRow[index] ?? '';
-    });
+      return ranges;
+    }, []);
   }
 
   private isProtectedHeader(
