@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ProcessSheetOrderController } from '../../controller/sheet/orders/ProcessSheetOrder.controller';
 import { UpsertSheetRowController } from '../../controller/sheet/rows/UpsertSheetRow.controller';
 import { GoogleSheetsRowRepository } from '../../driver/sheet/GoogleSheetsRowRepository';
+import { GetSheetOrderService } from '../../services/sheet/GetSheetOrderService';
 import { ProcessSheetOrderService } from '../../services/sheet/ProcessSheetOrderService';
 import { UpsertSheetRowService } from '../../services/sheet/UpsertSheetRowService';
 import { UPSERT_SHEET_ROW_REPOSITORY } from '../../../core/adapters/repositories/sheet/IUpsertSheetRowRepository';
@@ -9,6 +10,7 @@ import { UPSERT_SHEET_ROW_REPOSITORY } from '../../../core/adapters/repositories
 @Module({
   controllers: [ProcessSheetOrderController, UpsertSheetRowController],
   providers: [
+    GetSheetOrderService,
     ProcessSheetOrderService,
     UpsertSheetRowService,
     {

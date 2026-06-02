@@ -5,12 +5,39 @@ import { IUpsertSheetRowRepository } from '../../../core/adapters/repositories/s
 import {
   SheetCellValue,
   SheetRowAppend,
+  SheetRowFindByColumn,
+  SheetRowFound,
   SheetRowUpsert,
   SheetRowUpsertResult,
 } from '../../../core/entities/sheet/SheetRow';
 
 @Injectable()
 export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
+  private readonly legacyIdentifierMaxValue = 12815;
+
+  private readonly protectedHeaders = new Set([
+    'Id operacion',
+    'Traduccion ID',
+    'Notificacion de Amz',
+    'ESTADO MERCADOLIBRE',
+    'NROGUIAMADRE',
+    'ETABUE',
+    'ALERTA ETA',
+    'Ezeiza',
+    'ESTADO BUE',
+    'STOCK BUE',
+    'CANECLADA EN USA',
+    'Demora USA-BA',
+    '33',
+  ]);
+
+  private readonly legacyProtectedHeaders = new Set([
+    'Fecha llegada USA',
+    'Fecha Salida Usa',
+    'Fecha ingreso Arg',
+    'Fecha Salida Arg',
+  ]);
+
   private readonly sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
   private readonly defaultSheetName: string;
@@ -37,7 +64,7 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     const escapedSheetName = this.escapeSheetName(sheetName);
     const rows = await this.getRows(escapedSheetName);
     const headers = this.getHeaders(rows);
-    const values = this.mapDataToRow(headers, input.data);
+    const values = this.mapDataToRow(headers, input.data, input.data.Identificador);
 
     const appendResponse = await this.sheets.spreadsheets.values.append({
       spreadsheetId: this.spreadsheetId,
@@ -54,6 +81,42 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     );
 
     return { action: 'inserted', rowNumber };
+  }
+
+  async findByColumn(
+    input: SheetRowFindByColumn,
+  ): Promise<SheetRowFound | null> {
+    const sheetName = input.sheetName ?? this.defaultSheetName;
+    const escapedSheetName = this.escapeSheetName(sheetName);
+    const rows = await this.getRows(escapedSheetName);
+    const headers = this.getHeaders(rows);
+    const keyColumnIndex = headers.indexOf(input.keyColumn);
+
+    if (keyColumnIndex === -1) {
+      throw new BadRequestException(
+        `Column "${input.keyColumn}" was not found in the sheet headers.`,
+      );
+    }
+
+    const normalizedKeyValue = this.normalizeCell(input.keyValue);
+    const existingRowIndex = rows
+      .slice(1)
+      .findIndex(
+        (row) =>
+          this.normalizeCell(row[keyColumnIndex] ?? null) ===
+          normalizedKeyValue,
+      );
+
+    if (existingRowIndex === -1) {
+      return null;
+    }
+
+    const row = rows[existingRowIndex + 1] ?? [];
+
+    return {
+      rowNumber: existingRowIndex + 2,
+      data: this.mapRowToData(headers, row),
+    };
   }
 
   async upsert(input: SheetRowUpsert): Promise<SheetRowUpsertResult> {
@@ -85,6 +148,7 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
         headers,
         currentRow,
         input.data,
+        input.keyValue,
       );
 
       await this.sheets.spreadsheets.values.update({
@@ -126,22 +190,79 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
   private mapDataToRow(
     headers: string[],
     data: Record<string, SheetCellValue>,
+    identifier: SheetCellValue | undefined,
   ): SheetCellValue[] {
-    return headers.map((header) => data[header] ?? '');
+    return headers.map((header) => {
+      if (this.isProtectedHeader(header, identifier)) {
+        return '';
+      }
+
+      return data[header] ?? '';
+    });
+  }
+
+  private mapRowToData(
+    headers: string[],
+    row: SheetCellValue[],
+  ): Record<string, SheetCellValue> {
+    return headers.reduce<Record<string, SheetCellValue>>(
+      (data, header, index) => {
+        data[header] = row[index] ?? '';
+        return data;
+      },
+      {},
+    );
   }
 
   private mergeDataIntoExistingRow(
     headers: string[],
     currentRow: SheetCellValue[],
     data: Record<string, SheetCellValue>,
+    identifier: SheetCellValue,
   ): SheetCellValue[] {
     return headers.map((header, index) => {
+      if (this.isProtectedHeader(header, identifier)) {
+        return currentRow[index] ?? '';
+      }
+
       if (Object.prototype.hasOwnProperty.call(data, header)) {
         return data[header] ?? '';
       }
 
       return currentRow[index] ?? '';
     });
+  }
+
+  private isProtectedHeader(
+    header: string,
+    identifier: SheetCellValue | undefined,
+  ): boolean {
+    const normalizedHeader = header.trim();
+
+    if (this.protectedHeaders.has(normalizedHeader)) {
+      return true;
+    }
+
+    return (
+      this.legacyProtectedHeaders.has(normalizedHeader) &&
+      this.isLegacyIdentifier(identifier)
+    );
+  }
+
+  private isLegacyIdentifier(identifier: SheetCellValue | undefined): boolean {
+    if (identifier === undefined || identifier === null) {
+      return false;
+    }
+
+    const match = String(identifier)
+      .trim()
+      .match(/^T(?:LQ|QL)V-(\d+)$/i);
+
+    if (!match?.[1]) {
+      return false;
+    }
+
+    return Number(match[1]) <= this.legacyIdentifierMaxValue;
   }
 
   private normalizeCell(value: SheetCellValue): string {

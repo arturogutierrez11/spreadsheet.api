@@ -1,5 +1,7 @@
 import {
   SheetRowAppend,
+  SheetRowFindByColumn,
+  SheetRowFound,
   SheetRowUpsert,
   SheetRowUpsertResult,
 } from '../../../entities/sheet/SheetRow';
@@ -10,5 +12,6 @@ export const UPSERT_SHEET_ROW_REPOSITORY = Symbol(
 
 export interface IUpsertSheetRowRepository {
   append(input: SheetRowAppend): Promise<SheetRowUpsertResult>;
+  findByColumn(input: SheetRowFindByColumn): Promise<SheetRowFound | null>;
   upsert(input: SheetRowUpsert): Promise<SheetRowUpsertResult>;
 }

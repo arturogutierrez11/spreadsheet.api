@@ -19,19 +19,13 @@ export class ProcessSheetOrderService {
   ) {}
 
   execute(body: SheetOrderBody): Promise<SheetRowUpsertResult> {
-    const mode = this.normalizeMode(body.modo);
     const sheetName = this.optionalString(body.sheetName);
     const data = this.toSheetRowData(body);
-
-    if (mode === 'append') {
-      return this.sheetRowRepository.append({ sheetName, data });
-    }
-
     const keyValue = data.Identificador;
 
     if (!keyValue) {
       throw new BadRequestException(
-        'Identificador is required when modo is update or upsert.',
+        'Identificador is required to insert or update an order.',
       );
     }
 
@@ -41,22 +35,6 @@ export class ProcessSheetOrderService {
       keyValue,
       data,
     });
-  }
-
-  private normalizeMode(value: unknown): 'append' | 'upsert' {
-    const mode = String(value ?? 'append').trim().toLowerCase();
-
-    if (mode === 'append') {
-      return 'append';
-    }
-
-    if (mode === 'update' || mode === 'upsert') {
-      return 'upsert';
-    }
-
-    throw new BadRequestException(
-      `modo must be "append", "update" or "upsert". Received "${mode}".`,
-    );
   }
 
   private toSheetRowData(body: SheetOrderBody): SheetRowData {

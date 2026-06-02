@@ -84,7 +84,6 @@ Acepta el mismo formato que el nodo actual de Floxus:
 ```bash
 curl --location 'http://localhost:3000/sheet/orders' \
   --header 'Content-Type: application/x-www-form-urlencoded' \
-  --data-urlencode 'modo=append' \
   --data-urlencode 'Identificador=TLQV-12938' \
   --data-urlencode 'FECHAAMAZON=2026/05/28' \
   --data-urlencode 'FECHACOMPRA=2026/05/27' \
@@ -94,10 +93,58 @@ curl --location 'http://localhost:3000/sheet/orders' \
 
 Funcionamiento:
 
-- `modo=append`: inserta una nueva fila.
-- `modo=update` o `modo=upsert`: busca por la columna `Identificador`; si existe actualiza solo las columnas enviadas y conserva el resto de la fila, si no existe inserta.
+- El campo `Identificador` es obligatorio.
+- La API busca por la columna `Identificador`.
+- Si el `Identificador` ya existe, actualiza solo las columnas enviadas y conserva el resto de la fila.
+- Si el `Identificador` no existe, inserta una nueva fila.
+- Si el body trae `modo` por compatibilidad con el proceso viejo, la API lo ignora.
 
 Todos los campos del body se mapean contra los headers de la primera fila del Sheet. Por ejemplo, el campo `Cantidad de Unidades` va a la columna que tenga exactamente ese header.
+
+Campos protegidos: aunque el body envie valores para estos headers, la API no los escribe en el Sheet. En updates conserva el valor existente de esas columnas.
+
+```text
+Id operacion
+Traduccion ID
+Notificacion de Amz
+ESTADO MERCADOLIBRE
+NROGUIAMADRE
+ETABUE
+ALERTA ETA
+Ezeiza
+ESTADO BUE
+STOCK BUE
+CANECLADA EN USA
+Demora USA-BA
+33
+```
+
+Campos protegidos solo para identificadores historicos: si `Identificador` es `TLQV-12815` o menor, la API no escribe estos campos aunque vengan en el body. Para `TLQV-12816` o mayor, si se pueden escribir.
+
+```text
+Fecha llegada USA
+Fecha Salida Usa
+Fecha ingreso Arg
+Fecha Salida Arg
+```
+
+Para obtener una fila por `Identificador`:
+
+```bash
+curl --location 'http://localhost:3000/sheet/orders/TLQV-DOMINIO-TEST-001'
+```
+
+Respuesta:
+
+```json
+{
+  "rowNumber": 2,
+  "data": {
+    "Identificador": "TLQV-DOMINIO-TEST-001",
+    "ESTADO": "COMPRADA"
+  }
+}
+```
 
 ### JSON tecnico
 

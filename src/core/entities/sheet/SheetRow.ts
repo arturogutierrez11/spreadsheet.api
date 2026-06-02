@@ -14,6 +14,17 @@ export interface SheetRowAppend {
   data: SheetRowData;
 }
 
+export interface SheetRowFindByColumn {
+  sheetName?: string;
+  keyColumn: string;
+  keyValue: SheetCellValue;
+}
+
+export interface SheetRowFound {
+  rowNumber: number;
+  data: SheetRowData;
+}
+
 export interface SheetRowUpsertResult {
   action: 'inserted' | 'updated';
   rowNumber: number;
