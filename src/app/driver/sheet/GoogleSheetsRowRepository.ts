@@ -62,9 +62,12 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
   async append(input: SheetRowAppend): Promise<SheetRowUpsertResult> {
     const sheetName = input.sheetName ?? this.defaultSheetName;
     const escapedSheetName = this.escapeSheetName(sheetName);
-    const rows = await this.getRows(escapedSheetName);
-    const headers = this.getHeaders(rows);
-    const values = this.mapDataToRow(headers, input.data, input.data.Identificador);
+    const headers = await this.getHeaders(escapedSheetName);
+    const values = this.mapDataToRow(
+      headers,
+      input.data,
+      input.data.Identificador,
+    );
 
     const appendResponse = await this.sheets.spreadsheets.values.append({
       spreadsheetId: this.spreadsheetId,
@@ -88,33 +91,22 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
   ): Promise<SheetRowFound | null> {
     const sheetName = input.sheetName ?? this.defaultSheetName;
     const escapedSheetName = this.escapeSheetName(sheetName);
-    const rows = await this.getRows(escapedSheetName);
-    const headers = this.getHeaders(rows);
-    const keyColumnIndex = headers.indexOf(input.keyColumn);
+    const headers = await this.getHeaders(escapedSheetName);
+    const rowNumber = await this.findRowNumberByColumn(
+      escapedSheetName,
+      headers,
+      input.keyColumn,
+      input.keyValue,
+    );
 
-    if (keyColumnIndex === -1) {
-      throw new BadRequestException(
-        `Column "${input.keyColumn}" was not found in the sheet headers.`,
-      );
-    }
-
-    const normalizedKeyValue = this.normalizeCell(input.keyValue);
-    const existingRowIndex = rows
-      .slice(1)
-      .findIndex(
-        (row) =>
-          this.normalizeCell(row[keyColumnIndex] ?? null) ===
-          normalizedKeyValue,
-      );
-
-    if (existingRowIndex === -1) {
+    if (!rowNumber) {
       return null;
     }
 
-    const row = rows[existingRowIndex + 1] ?? [];
+    const row = await this.getRow(escapedSheetName, rowNumber, headers.length);
 
     return {
-      rowNumber: existingRowIndex + 2,
+      rowNumber,
       data: this.mapRowToData(headers, row),
     };
   }
@@ -122,27 +114,15 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
   async upsert(input: SheetRowUpsert): Promise<SheetRowUpsertResult> {
     const sheetName = input.sheetName ?? this.defaultSheetName;
     const escapedSheetName = this.escapeSheetName(sheetName);
-    const rows = await this.getRows(escapedSheetName);
-    const headers = this.getHeaders(rows);
-    const keyColumnIndex = headers.indexOf(input.keyColumn);
+    const headers = await this.getHeaders(escapedSheetName);
+    const rowNumber = await this.findRowNumberByColumn(
+      escapedSheetName,
+      headers,
+      input.keyColumn,
+      input.keyValue,
+    );
 
-    if (keyColumnIndex === -1) {
-      throw new BadRequestException(
-        `Column "${input.keyColumn}" was not found in the sheet headers.`,
-      );
-    }
-
-    const normalizedKeyValue = this.normalizeCell(input.keyValue);
-    const existingRowIndex = rows
-      .slice(1)
-      .findIndex(
-        (row) =>
-          this.normalizeCell(row[keyColumnIndex] ?? null) ===
-          normalizedKeyValue,
-      );
-
-    if (existingRowIndex >= 0) {
-      const rowNumber = existingRowIndex + 2;
+    if (rowNumber) {
       const updateRanges = this.mapDataToUpdateRanges(
         escapedSheetName,
         rowNumber,
@@ -167,17 +147,14 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     return this.append({ sheetName, data: input.data });
   }
 
-  private async getRows(sheetName: string): Promise<SheetCellValue[][]> {
+  private async getHeaders(sheetName: string): Promise<string[]> {
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
-      range: `${sheetName}!A:ZZ`,
+      range: `${sheetName}!A1:ZZ1`,
     });
 
-    return (response.data.values ?? []) as SheetCellValue[][];
-  }
-
-  private getHeaders(rows: SheetCellValue[][]): string[] {
-    const headers = rows[0]?.map((value) => String(value).trim()) ?? [];
+    const values = (response.data.values ?? []) as SheetCellValue[][];
+    const headers = values[0]?.map((value) => String(value).trim()) ?? [];
 
     if (headers.length === 0) {
       throw new BadRequestException(
@@ -186,6 +163,47 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     }
 
     return headers;
+  }
+
+  private async getRow(
+    sheetName: string,
+    rowNumber: number,
+    headerCount: number,
+  ): Promise<SheetCellValue[]> {
+    const response = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `${sheetName}!A${rowNumber}:${this.columnName(headerCount)}${rowNumber}`,
+    });
+
+    return ((response.data.values ?? []) as SheetCellValue[][])[0] ?? [];
+  }
+
+  private async findRowNumberByColumn(
+    sheetName: string,
+    headers: string[],
+    keyColumn: string,
+    keyValue: SheetCellValue,
+  ): Promise<number | null> {
+    const keyColumnIndex = headers.indexOf(keyColumn);
+
+    if (keyColumnIndex === -1) {
+      throw new BadRequestException(
+        `Column "${keyColumn}" was not found in the sheet headers.`,
+      );
+    }
+
+    const keyColumnName = this.columnName(keyColumnIndex + 1);
+    const response = await this.sheets.spreadsheets.values.get({
+      spreadsheetId: this.spreadsheetId,
+      range: `${sheetName}!${keyColumnName}2:${keyColumnName}`,
+    });
+    const values = (response.data.values ?? []) as SheetCellValue[][];
+    const normalizedKeyValue = this.normalizeCell(keyValue);
+    const rowIndex = values.findIndex(
+      (row) => this.normalizeCell(row[0] ?? null) === normalizedKeyValue,
+    );
+
+    return rowIndex >= 0 ? rowIndex + 2 : null;
   }
 
   private mapDataToRow(

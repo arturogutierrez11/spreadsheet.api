@@ -176,4 +176,6 @@ Respuesta:
 ```
 
 La primera fila del Sheet debe contener los headers. Las claves de `data` se mapean por nombre de header.
+
+Nota de performance: para upserts por `Identificador`, la API lee solo la fila de headers y la columna `Identificador`; no carga toda la planilla.
 # spreadsheet.api
