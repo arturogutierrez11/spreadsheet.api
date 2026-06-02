@@ -78,41 +78,21 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     const sheetName = input.sheetName ?? this.defaultSheetName;
     const escapedSheetName = this.escapeSheetName(sheetName);
     const headers = await this.getHeaders(escapedSheetName);
-    const initialHeaders = this.initialAppendHeaders(
+    const rowNumber = await this.nextRowNumberByColumn(
+      escapedSheetName,
       headers,
-      input.data.Identificador,
+      'Identificador',
     );
-    const values = this.mapDataToRow(initialHeaders, input.data);
-
-    const appendResponse = await this.withGoogleSheetsRetry(() =>
-      this.sheets.spreadsheets.values.append({
-        spreadsheetId: this.spreadsheetId,
-        range: `${escapedSheetName}!A:${this.columnName(initialHeaders.length)}`,
-        valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: {
-          values: [values],
-        },
-      }, {
-        timeout: this.googleRequestTimeoutMs,
-      }),
-    );
-
-    const rowNumber = this.extractRowNumber(
-      appendResponse.data.updates?.updatedRange,
-    );
-
-    const remainingUpdateRanges = this.mapDataToUpdateRanges(
+    const updateRanges = this.mapDataToUpdateRanges(
       escapedSheetName,
       rowNumber,
-      headers.slice(initialHeaders.length),
+      headers,
       input.data,
       input.data.Identificador,
-      initialHeaders.length,
     );
 
-    if (remainingUpdateRanges.length > 0) {
-      await this.batchUpdateValues(remainingUpdateRanges);
+    if (updateRanges.length > 0) {
+      await this.batchUpdateValues(updateRanges);
     }
 
     this.cacheInsertedRowNumber(escapedSheetName, headers, input.data, rowNumber);
@@ -249,6 +229,29 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     return rowNumber ?? null;
   }
 
+  private async nextRowNumberByColumn(
+    sheetName: string,
+    headers: string[],
+    keyColumn: string,
+  ): Promise<number> {
+    const keyColumnIndex = headers.indexOf(keyColumn);
+
+    if (keyColumnIndex === -1) {
+      throw new BadRequestException(
+        `Column "${keyColumn}" was not found in the sheet headers.`,
+      );
+    }
+
+    const rowNumberByKey = await this.getRowNumberMapByColumn(
+      sheetName,
+      keyColumn,
+      keyColumnIndex,
+    );
+    const lastRowNumber = Math.max(1, ...rowNumberByKey.values());
+
+    return lastRowNumber + 1;
+  }
+
   private async getRowNumberMapByColumn(
     sheetName: string,
     keyColumn: string,
@@ -292,13 +295,6 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     return rowNumberByKey;
   }
 
-  private mapDataToRow(
-    headers: string[],
-    data: Record<string, SheetCellValue>,
-  ): SheetCellValue[] {
-    return headers.map((header) => data[header] ?? '');
-  }
-
   private mapRowToData(
     headers: string[],
     row: SheetCellValue[],
@@ -339,21 +335,6 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       },
       [],
     );
-  }
-
-  private initialAppendHeaders(
-    headers: string[],
-    identifier: SheetCellValue | undefined,
-  ): string[] {
-    const firstProtectedIndex = headers.findIndex((header) =>
-      this.isProtectedHeader(header, identifier),
-    );
-
-    if (firstProtectedIndex === -1) {
-      return headers;
-    }
-
-    return headers.slice(0, firstProtectedIndex);
   }
 
   private async batchUpdateValues(
