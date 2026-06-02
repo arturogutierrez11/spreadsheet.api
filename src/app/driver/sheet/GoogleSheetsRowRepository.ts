@@ -23,7 +23,10 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
 
   private readonly protectedHeaders = new Set([
     'Id operacion',
+    'Id operaciones',
     'Traduccion ID',
+    'Transaccion ID',
+    'Transacciones ID',
     'Notificacion de Amz',
     'ESTADO MERCADOLIBRE',
     'NROGUIAMADRE',
@@ -35,14 +38,14 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     'CANECLADA EN USA',
     'Demora USA-BA',
     '33',
-  ]);
+  ].map((header) => this.normalizeHeader(header)));
 
   private readonly legacyProtectedHeaders = new Set([
     'Fecha llegada USA',
     'Fecha Salida Usa',
     'Fecha ingreso Arg',
     'Fecha Salida Arg',
-  ]);
+  ].map((header) => this.normalizeHeader(header)));
 
   private readonly sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
@@ -373,7 +376,7 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     header: string,
     identifier: SheetCellValue | undefined,
   ): boolean {
-    const normalizedHeader = header.trim();
+    const normalizedHeader = this.normalizeHeader(header);
 
     if (this.protectedHeaders.has(normalizedHeader)) {
       return true;
@@ -383,6 +386,14 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       this.legacyProtectedHeaders.has(normalizedHeader) &&
       this.isLegacyIdentifier(identifier)
     );
+  }
+
+  private normalizeHeader(header: string): string {
+    return header
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
   }
 
   private isLegacyIdentifier(identifier: SheetCellValue | undefined): boolean {
