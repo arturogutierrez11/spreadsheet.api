@@ -13,6 +13,47 @@ type SheetOrderBody = Record<string, unknown>;
 
 @Injectable()
 export class ProcessSheetOrderService {
+  private readonly numericFields = new Set([
+    'PESOPRODUCTO',
+    'Cantidad de Unidades',
+    'CANTIDAD DE BULTOS',
+    'PRECIOVENTA',
+    'SALDOML',
+    'COMISIONML',
+    'COSTOENVIO',
+    'Impuestos',
+    'PRECIOAMAZONUSD',
+    'Tipo de cambio de Automeli',
+    'TIPODECAMBIOCOMPRA',
+    'PESOVOLUMENTICO',
+    'VALORXKG',
+    'Productoco',
+    'Productoco.b',
+    'DIFACTURA',
+    'DIFACTURA.B',
+    'TEFACTURA',
+    'TEFACTURA.B',
+    'IVAFACTURA',
+    'IVAFACTURA.B',
+    'LAFACTURA',
+    'LAFACTURA.B',
+    'A13VENTA',
+    'APORTE ML',
+    'FLETEINTERNACIONALA',
+    'IIFACTURA',
+    'CUOTASML',
+    'COM Vendedor',
+    'PESOCONFIRMADO',
+    'LARGOPRODUCTO',
+    'ANCHOPRODUCTO',
+    'ALTOPRODUCTO',
+    'Demora USA-BA',
+    '28',
+    '29',
+    '30',
+    '33',
+  ]);
+
   constructor(
     @Inject(UPSERT_SHEET_ROW_REPOSITORY)
     private readonly sheetRowRepository: IUpsertSheetRowRepository,
@@ -43,18 +84,13 @@ export class ProcessSheetOrderService {
         return data;
       }
 
-      data[key] = this.toSheetCellValue(value);
+      data[key] = this.toSheetCellValue(key, value);
       return data;
     }, {});
   }
 
-  private toSheetCellValue(value: unknown): SheetCellValue {
-    if (
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean' ||
-      value === null
-    ) {
+  private toSheetCellValue(key: string, value: unknown): SheetCellValue {
+    if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
       return value;
     }
 
@@ -62,7 +98,19 @@ export class ProcessSheetOrderService {
       return value.map((item) => String(item)).join(', ');
     }
 
-    return String(value ?? '');
+    const stringValue = String(value ?? '').trim();
+
+    if (!this.numericFields.has(key) || stringValue === '') {
+      return stringValue;
+    }
+
+    const normalizedNumber = Number(stringValue.replace(',', '.'));
+
+    if (Number.isNaN(normalizedNumber)) {
+      return stringValue;
+    }
+
+    return normalizedNumber;
   }
 
   private optionalString(value: unknown): string | undefined {

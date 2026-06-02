@@ -101,6 +101,8 @@ Funcionamiento:
 
 Todos los campos del body se mapean contra los headers de la primera fila del Sheet. Por ejemplo, el campo `Cantidad de Unidades` va a la columna que tenga exactamente ese header.
 
+Campos numericos: importes, pesos, medidas y cantidades se envian a Google Sheets como numeros para que las formulas del Sheet los puedan operar correctamente. IDs como `NROVENTA`, `CUITCOMPRADOR`, `CUITENVIO` y `CODIGO POSTAL` se mantienen como texto.
+
 Campos protegidos: aunque el body envie valores para estos headers, la API no los escribe en el Sheet. En updates conserva el valor existente de esas columnas.
 
 ```text
