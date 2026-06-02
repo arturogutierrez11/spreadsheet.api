@@ -4,12 +4,18 @@ import { google, sheets_v4 } from 'googleapis';
 import { IUpsertSheetRowRepository } from '../../../core/adapters/repositories/sheet/IUpsertSheetRowRepository';
 import {
   SheetCellValue,
+  SheetRowData,
   SheetRowAppend,
   SheetRowFindByColumn,
   SheetRowFound,
   SheetRowUpsert,
   SheetRowUpsertResult,
 } from '../../../core/entities/sheet/SheetRow';
+
+interface CacheEntry<T> {
+  expiresAt: number;
+  value: T;
+}
 
 @Injectable()
 export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
@@ -41,6 +47,12 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
   private readonly sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
   private readonly defaultSheetName: string;
+  private readonly googleRequestTimeoutMs = 30000;
+  private readonly headersCacheTtlMs = 300000;
+  private readonly rowNumberCacheTtlMs = 300000;
+  private readonly maxGoogleApiAttempts = 4;
+  private readonly headersCache = new Map<string, CacheEntry<string[]>>();
+  private readonly rowNumberCache = new Map<string, CacheEntry<Map<string, number>>>();
 
   constructor(private readonly configService: ConfigService) {
     this.spreadsheetId = this.readRequiredConfig(
@@ -63,25 +75,44 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     const sheetName = input.sheetName ?? this.defaultSheetName;
     const escapedSheetName = this.escapeSheetName(sheetName);
     const headers = await this.getHeaders(escapedSheetName);
-    const values = this.mapDataToRow(
+    const initialHeaders = this.initialAppendHeaders(
       headers,
-      input.data,
       input.data.Identificador,
     );
+    const values = this.mapDataToRow(initialHeaders, input.data);
 
-    const appendResponse = await this.sheets.spreadsheets.values.append({
-      spreadsheetId: this.spreadsheetId,
-      range: `${escapedSheetName}!A:${this.columnName(headers.length)}`,
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: {
-        values: [values],
-      },
-    });
+    const appendResponse = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: `${escapedSheetName}!A:${this.columnName(initialHeaders.length)}`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: [values],
+        },
+      }, {
+        timeout: this.googleRequestTimeoutMs,
+      }),
+    );
 
     const rowNumber = this.extractRowNumber(
       appendResponse.data.updates?.updatedRange,
     );
+
+    const remainingUpdateRanges = this.mapDataToUpdateRanges(
+      escapedSheetName,
+      rowNumber,
+      headers.slice(initialHeaders.length),
+      input.data,
+      input.data.Identificador,
+      initialHeaders.length,
+    );
+
+    if (remainingUpdateRanges.length > 0) {
+      await this.batchUpdateValues(remainingUpdateRanges);
+    }
+
+    this.cacheInsertedRowNumber(escapedSheetName, headers, input.data, rowNumber);
 
     return { action: 'inserted', rowNumber };
   }
@@ -132,13 +163,7 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       );
 
       if (updateRanges.length > 0) {
-        await this.sheets.spreadsheets.values.batchUpdate({
-          spreadsheetId: this.spreadsheetId,
-          requestBody: {
-            valueInputOption: 'USER_ENTERED',
-            data: updateRanges,
-          },
-        });
+        await this.batchUpdateValues(updateRanges);
       }
 
       return { action: 'updated', rowNumber };
@@ -148,10 +173,20 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
   }
 
   private async getHeaders(sheetName: string): Promise<string[]> {
-    const response = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
-      range: `${sheetName}!A1:ZZ1`,
-    });
+    const cachedHeaders = this.getCachedValue(this.headersCache, sheetName);
+
+    if (cachedHeaders) {
+      return cachedHeaders;
+    }
+
+    const response = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A1:ZZ1`,
+      }, {
+        timeout: this.googleRequestTimeoutMs,
+      }),
+    );
 
     const values = (response.data.values ?? []) as SheetCellValue[][];
     const headers = values[0]?.map((value) => String(value).trim()) ?? [];
@@ -162,6 +197,11 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       );
     }
 
+    this.headersCache.set(sheetName, {
+      expiresAt: Date.now() + this.headersCacheTtlMs,
+      value: headers,
+    });
+
     return headers;
   }
 
@@ -170,10 +210,14 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     rowNumber: number,
     headerCount: number,
   ): Promise<SheetCellValue[]> {
-    const response = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
-      range: `${sheetName}!A${rowNumber}:${this.columnName(headerCount)}${rowNumber}`,
-    });
+    const response = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!A${rowNumber}:${this.columnName(headerCount)}${rowNumber}`,
+      }, {
+        timeout: this.googleRequestTimeoutMs,
+      }),
+    );
 
     return ((response.data.values ?? []) as SheetCellValue[][])[0] ?? [];
   }
@@ -192,32 +236,64 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       );
     }
 
+    const rowNumberByKey = await this.getRowNumberMapByColumn(
+      sheetName,
+      keyColumn,
+      keyColumnIndex,
+    );
+    const rowNumber = rowNumberByKey.get(this.normalizeCell(keyValue));
+
+    return rowNumber ?? null;
+  }
+
+  private async getRowNumberMapByColumn(
+    sheetName: string,
+    keyColumn: string,
+    keyColumnIndex: number,
+  ): Promise<Map<string, number>> {
+    const cacheKey = `${sheetName}:${keyColumn}`;
+    const cachedRowNumberMap = this.getCachedValue(this.rowNumberCache, cacheKey);
+
+    if (cachedRowNumberMap) {
+      return cachedRowNumberMap;
+    }
+
     const keyColumnName = this.columnName(keyColumnIndex + 1);
-    const response = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
-      range: `${sheetName}!${keyColumnName}2:${keyColumnName}`,
-    });
+    const response = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${sheetName}!${keyColumnName}2:${keyColumnName}`,
+      }, {
+        timeout: this.googleRequestTimeoutMs,
+      }),
+    );
     const values = (response.data.values ?? []) as SheetCellValue[][];
-    const normalizedKeyValue = this.normalizeCell(keyValue);
-    const rowIndex = values.findIndex(
-      (row) => this.normalizeCell(row[0] ?? null) === normalizedKeyValue,
+    const rowNumberByKey = values.reduce<Map<string, number>>(
+      (map, row, index) => {
+        const key = this.normalizeCell(row[0] ?? null);
+
+        if (key) {
+          map.set(key, index + 2);
+        }
+
+        return map;
+      },
+      new Map<string, number>(),
     );
 
-    return rowIndex >= 0 ? rowIndex + 2 : null;
+    this.rowNumberCache.set(cacheKey, {
+      expiresAt: Date.now() + this.rowNumberCacheTtlMs,
+      value: rowNumberByKey,
+    });
+
+    return rowNumberByKey;
   }
 
   private mapDataToRow(
     headers: string[],
     data: Record<string, SheetCellValue>,
-    identifier: SheetCellValue | undefined,
   ): SheetCellValue[] {
-    return headers.map((header) => {
-      if (this.isProtectedHeader(header, identifier)) {
-        return '';
-      }
-
-      return data[header] ?? '';
-    });
+    return headers.map((header) => data[header] ?? '');
   }
 
   private mapRowToData(
@@ -237,25 +313,60 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     sheetName: string,
     rowNumber: number,
     headers: string[],
-    data: Record<string, SheetCellValue>,
+    data: SheetRowData,
     identifier: SheetCellValue,
+    columnOffset = 0,
   ): sheets_v4.Schema$ValueRange[] {
-    return headers.reduce<sheets_v4.Schema$ValueRange[]>((ranges, header, index) => {
-      if (this.isProtectedHeader(header, identifier)) {
+    return headers.reduce<sheets_v4.Schema$ValueRange[]>(
+      (ranges, header, index) => {
+        if (this.isProtectedHeader(header, identifier)) {
+          return ranges;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(data, header)) {
+          const columnName = this.columnName(columnOffset + index + 1);
+
+          ranges.push({
+            range: `${sheetName}!${columnName}${rowNumber}`,
+            values: [[data[header] ?? '']],
+          });
+        }
+
         return ranges;
-      }
+      },
+      [],
+    );
+  }
 
-      if (Object.prototype.hasOwnProperty.call(data, header)) {
-        const columnName = this.columnName(index + 1);
+  private initialAppendHeaders(
+    headers: string[],
+    identifier: SheetCellValue | undefined,
+  ): string[] {
+    const firstProtectedIndex = headers.findIndex((header) =>
+      this.isProtectedHeader(header, identifier),
+    );
 
-        ranges.push({
-          range: `${sheetName}!${columnName}${rowNumber}`,
-          values: [[data[header] ?? '']],
-        });
-      }
+    if (firstProtectedIndex === -1) {
+      return headers;
+    }
 
-      return ranges;
-    }, []);
+    return headers.slice(0, firstProtectedIndex);
+  }
+
+  private async batchUpdateValues(
+    data: sheets_v4.Schema$ValueRange[],
+  ): Promise<void> {
+    await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data,
+        },
+      }, {
+        timeout: this.googleRequestTimeoutMs,
+      }),
+    );
   }
 
   private isProtectedHeader(
@@ -292,6 +403,109 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
 
   private normalizeCell(value: SheetCellValue): string {
     return String(value ?? '').trim();
+  }
+
+  private cacheInsertedRowNumber(
+    sheetName: string,
+    headers: string[],
+    data: SheetRowData,
+    rowNumber: number,
+  ): void {
+    if (rowNumber <= 0) {
+      return;
+    }
+
+    const identifierHeader = 'Identificador';
+    const identifierIndex = headers.indexOf(identifierHeader);
+    const identifier = data[identifierHeader];
+
+    if (identifierIndex === -1 || identifier === undefined) {
+      return;
+    }
+
+    const cacheKey = `${sheetName}:${identifierHeader}`;
+    const rowNumberByKey = this.getCachedValue(this.rowNumberCache, cacheKey);
+
+    rowNumberByKey?.set(this.normalizeCell(identifier), rowNumber);
+  }
+
+  private getCachedValue<T>(
+    cache: Map<string, CacheEntry<T>>,
+    key: string,
+  ): T | null {
+    const cachedValue = cache.get(key);
+
+    if (!cachedValue) {
+      return null;
+    }
+
+    if (cachedValue.expiresAt <= Date.now()) {
+      cache.delete(key);
+      return null;
+    }
+
+    return cachedValue.value;
+  }
+
+  private async withGoogleSheetsRetry<T>(operation: () => Promise<T>): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= this.maxGoogleApiAttempts; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+
+        if (
+          attempt === this.maxGoogleApiAttempts ||
+          !this.isRetryableGoogleSheetsError(error)
+        ) {
+          throw error;
+        }
+
+        await this.sleep(this.retryDelayMs(attempt));
+      }
+    }
+
+    throw lastError;
+  }
+
+  private isRetryableGoogleSheetsError(error: unknown): boolean {
+    const status = this.getErrorStatus(error);
+
+    return (
+      status === 429 ||
+      status === 500 ||
+      status === 502 ||
+      status === 503 ||
+      status === 504
+    );
+  }
+
+  private getErrorStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null) {
+      return undefined;
+    }
+
+    const maybeError = error as {
+      code?: unknown;
+      response?: { status?: unknown };
+      status?: unknown;
+    };
+    const status =
+      maybeError.response?.status ?? maybeError.status ?? maybeError.code;
+
+    return typeof status === 'number' ? status : undefined;
+  }
+
+  private retryDelayMs(attempt: number): number {
+    return 500 * 2 ** (attempt - 1);
+  }
+
+  private sleep(delayMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, delayMs);
+    });
   }
 
   private columnName(columnNumber: number): string {

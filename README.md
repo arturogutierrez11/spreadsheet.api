@@ -75,6 +75,47 @@ npm run start:dev
 
 ## Endpoints
 
+### Costos Operaciones
+
+`GET /sheet/costos-operaciones`
+
+Obtiene filas de la solapa configurada en `COSTOS_OPERACIONES_SHEET_NAME`, con paginado.
+
+```bash
+curl 'http://localhost:3000/sheet/costos-operaciones?page=1&pageSize=100'
+```
+
+Respuesta:
+
+```json
+{
+  "page": 1,
+  "pageSize": 100,
+  "totalRows": 250,
+  "totalPages": 3,
+  "hasNextPage": true,
+  "hasPreviousPage": false,
+  "rows": [
+    {
+      "rowNumber": 2,
+      "data": {
+        "Concepto": "Demo",
+        "Importe": 123
+      }
+    }
+  ]
+}
+```
+
+Variables nuevas:
+
+```env
+COSTOS_OPERACIONES_SPREADSHEET_ID=1S5pHKwGPRa_sS3Mc2knwennA2IhNSXDtJ3sEK_On0aM
+COSTOS_OPERACIONES_SHEET_NAME=Costos Operaciones
+```
+
+`page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
+
 ### Floxus form-urlencoded
 
 `POST /sheet/orders`
@@ -104,6 +145,7 @@ Todos los campos del body se mapean contra los headers de la primera fila del Sh
 Campos numericos: importes, pesos, medidas y cantidades se envian a Google Sheets como numeros para que las formulas del Sheet los puedan operar correctamente. IDs como `NROVENTA`, `CUITCOMPRADOR`, `CUITENVIO` y `CODIGO POSTAL` se mantienen como texto.
 
 Campos protegidos: aunque el body envie valores para estos headers, la API no los escribe en el Sheet. En updates conserva el valor existente de esas columnas.
+En inserts tampoco manda valores vacios a esos campos, para no borrar formulas preexistentes.
 
 ```text
 Id operacion
