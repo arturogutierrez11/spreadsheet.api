@@ -8,8 +8,10 @@ import { GetSheetOrderService } from '../../services/sheet/GetSheetOrderService'
 import { ListCostosOperacionesRowsService } from '../../services/sheet/costosOperaciones/ListCostosOperacionesRowsService';
 import { ProcessSheetOrderService } from '../../services/sheet/ProcessSheetOrderService';
 import { UpsertSheetRowService } from '../../services/sheet/UpsertSheetRowService';
+import { PLANILLA_CONTROL_REPOSITORY } from '../../../core/adapters/repositories/madre-api/IPlanillaControlRepository';
 import { COSTOS_OPERACIONES_SHEET_REPOSITORY } from '../../../core/adapters/repositories/sheet/ICostosOperacionesSheetRepository';
 import { UPSERT_SHEET_ROW_REPOSITORY } from '../../../core/adapters/repositories/sheet/IUpsertSheetRowRepository';
+import { PlanillaControlRepository } from '../../../core/drivers/repositories/madre-api/PlanillaControlRepository';
 
 @Module({
   controllers: [
@@ -22,6 +24,10 @@ import { UPSERT_SHEET_ROW_REPOSITORY } from '../../../core/adapters/repositories
     ListCostosOperacionesRowsService,
     ProcessSheetOrderService,
     UpsertSheetRowService,
+    {
+      provide: PLANILLA_CONTROL_REPOSITORY,
+      useClass: PlanillaControlRepository,
+    },
     {
       provide: COSTOS_OPERACIONES_SHEET_REPOSITORY,
       useClass: CostosOperacionesGoogleSheetsRepository,

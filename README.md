@@ -222,4 +222,17 @@ Respuesta:
 La primera fila del Sheet debe contener los headers. Las claves de `data` se mapean por nombre de header.
 
 Nota de performance: para upserts por `Identificador`, la API lee solo la fila de headers y la columna `Identificador`; no carga toda la planilla.
+
+Cada insert/update en el Sheet tambien sincroniza la tabla `planilla_control` en Madre API:
+
+- `inserted`: `POST /api/internal/planilla-control`
+- `updated`: `PATCH /api/internal/planilla-control/{id}`
+- si el PATCH devuelve 404, intenta POST
+
+Variables:
+
+```env
+MADRE_API_BASE_URL=https://api.madre.loquieroaca.com
+MADRE_API_INTERNAL_API_KEY=your-internal-api-key
+```
 # spreadsheet.api

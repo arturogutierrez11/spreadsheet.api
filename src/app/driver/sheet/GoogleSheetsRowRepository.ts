@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, sheets_v4 } from 'googleapis';
 import { IUpsertSheetRowRepository } from '../../../core/adapters/repositories/sheet/IUpsertSheetRowRepository';
@@ -19,6 +19,10 @@ interface CacheEntry<T> {
 
 @Injectable()
 export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
+  private readonly logger = new Logger(GoogleSheetsRowRepository.name);
+  private readonly magenta = '\u001b[35m';
+  private readonly resetColor = '\u001b[0m';
+
   private readonly legacyIdentifierMaxValue = 12815;
 
   private readonly protectedHeaders = new Set([
@@ -95,6 +99,10 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       await this.batchUpdateValues(updateRanges);
     }
 
+    this.logPurple(
+      `Google Sheets write inserted identificador=${this.normalizeCell(input.data.Identificador ?? null)} row=${rowNumber} cells=${updateRanges.length}`,
+    );
+
     this.cacheInsertedRowNumber(escapedSheetName, headers, input.data, rowNumber);
 
     return { action: 'inserted', rowNumber };
@@ -148,6 +156,10 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
       if (updateRanges.length > 0) {
         await this.batchUpdateValues(updateRanges);
       }
+
+      this.logPurple(
+        `Google Sheets write updated identificador=${this.normalizeCell(input.keyValue)} row=${rowNumber} cells=${updateRanges.length}`,
+      );
 
       return { action: 'updated', rowNumber };
     }
@@ -395,6 +407,10 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
 
   private normalizeCell(value: SheetCellValue): string {
     return String(value ?? '').trim();
+  }
+
+  private logPurple(message: string): void {
+    this.logger.log(`${this.magenta}${message}${this.resetColor}`);
   }
 
   private cacheInsertedRowNumber(

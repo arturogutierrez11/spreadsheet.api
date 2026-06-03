@@ -1,5 +1,9 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import {
+  IPlanillaControlRepository,
+  PLANILLA_CONTROL_REPOSITORY,
+} from '../../../core/adapters/repositories/madre-api/IPlanillaControlRepository';
+import {
   IUpsertSheetRowRepository,
   UPSERT_SHEET_ROW_REPOSITORY,
 } from '../../../core/adapters/repositories/sheet/IUpsertSheetRowRepository';
@@ -8,6 +12,7 @@ import {
   SheetRowData,
   SheetRowUpsertResult,
 } from '../../../core/entities/sheet/SheetRow';
+import { ProcessSheetOrderInteractor } from '../../../core/interactor/sheet/ProcessSheetOrderInteractor';
 
 type SheetOrderBody = Record<string, unknown>;
 
@@ -57,23 +62,26 @@ export class ProcessSheetOrderService {
   constructor(
     @Inject(UPSERT_SHEET_ROW_REPOSITORY)
     private readonly sheetRowRepository: IUpsertSheetRowRepository,
+    @Inject(PLANILLA_CONTROL_REPOSITORY)
+    private readonly planillaControlRepository: IPlanillaControlRepository,
   ) {}
 
-  execute(body: SheetOrderBody): Promise<SheetRowUpsertResult> {
+  async execute(body: SheetOrderBody): Promise<SheetRowUpsertResult> {
     const sheetName = this.optionalString(body.sheetName);
     const data = this.toSheetRowData(body);
-    const keyValue = data.Identificador;
-
-    if (!keyValue) {
+    if (!data.Identificador) {
       throw new BadRequestException(
         'Identificador is required to insert or update an order.',
       );
     }
 
-    return this.sheetRowRepository.upsert({
+    const interactor = new ProcessSheetOrderInteractor(
+      this.sheetRowRepository,
+      this.planillaControlRepository,
+    );
+
+    return interactor.execute({
       sheetName,
-      keyColumn: 'Identificador',
-      keyValue,
       data,
     });
   }
@@ -90,7 +98,11 @@ export class ProcessSheetOrderService {
   }
 
   private toSheetCellValue(key: string, value: unknown): SheetCellValue {
-    if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+    if (
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      value === null
+    ) {
       return value;
     }
 
