@@ -120,7 +120,7 @@ COSTOS_OPERACIONES_SHEET_NAME=Costos Operaciones
 
 `POST /sheet/orders`
 
-Acepta el mismo formato que el nodo actual de Floxus:
+Acepta el mismo formato que el nodo actual de Floxus y encola la escritura en BullMQ:
 
 ```bash
 curl --location 'http://localhost:3000/sheet/orders' \
@@ -135,10 +135,21 @@ curl --location 'http://localhost:3000/sheet/orders' \
 Funcionamiento:
 
 - El campo `Identificador` es obligatorio.
-- La API busca por la columna `Identificador`.
-- Si el `Identificador` ya existe, actualiza solo las columnas enviadas y conserva el resto de la fila.
-- Si el `Identificador` no existe, inserta una nueva fila.
+- El endpoint responde `202` cuando el job queda encolado.
+- El worker procesa la cola con concurrencia `1` por defecto.
+- El rate limit por defecto procesa como maximo `1` job cada `1000ms`.
+- Si el `Identificador` ya existe, el worker actualiza solo las columnas enviadas y conserva el resto de la fila.
+- Si el `Identificador` no existe, el worker inserta una nueva fila.
 - Si el body trae `modo` por compatibilidad con el proceso viejo, la API lo ignora.
+
+Respuesta:
+
+```json
+{
+  "jobId": "123",
+  "status": "queued"
+}
+```
 
 Todos los campos del body se mapean contra los headers de la primera fila del Sheet. Por ejemplo, el campo `Cantidad de Unidades` va a la columna que tenga exactamente ese header.
 
@@ -221,9 +232,9 @@ Respuesta:
 
 La primera fila del Sheet debe contener los headers. Las claves de `data` se mapean por nombre de header.
 
-Nota de performance: para upserts por `Identificador`, la API lee solo la fila de headers y la columna `Identificador`; no carga toda la planilla.
+Nota de performance: para upserts por `Identificador`, el worker lee solo la fila de headers y la columna `Identificador`; no carga toda la planilla.
 
-Cada insert/update en el Sheet tambien sincroniza la tabla `planilla_control` en Madre API:
+Cada job procesado hace insert/update en el Sheet y tambien sincroniza la tabla `planilla_control` en Madre API:
 
 - `inserted`: `POST /api/internal/planilla-control`
 - `updated`: `PATCH /api/internal/planilla-control/{id}`
@@ -234,5 +245,15 @@ Variables:
 ```env
 MADRE_API_BASE_URL=https://api.madre.loquieroaca.com
 MADRE_API_INTERNAL_API_KEY=your-internal-api-key
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+# REDIS_TLS=false
+# REDIS_USERNAME=default
+# REDIS_PASSWORD=
+SHEET_ORDER_QUEUE_CONCURRENCY=1
+SHEET_ORDER_QUEUE_RATE_LIMIT_MAX=1
+SHEET_ORDER_QUEUE_RATE_LIMIT_DURATION_MS=1000
+SHEET_ORDER_QUEUE_ATTEMPTS=5
+SHEET_ORDER_QUEUE_BACKOFF_MS=5000
 ```
 # spreadsheet.api

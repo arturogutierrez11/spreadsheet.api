@@ -4,6 +4,7 @@ import { ProcessSheetOrderController } from '../../controller/sheet/orders/Proce
 import { UpsertSheetRowController } from '../../controller/sheet/rows/UpsertSheetRow.controller';
 import { CostosOperacionesGoogleSheetsRepository } from '../../driver/sheet/costosOperaciones/CostosOperacionesGoogleSheetsRepository';
 import { GoogleSheetsRowRepository } from '../../driver/sheet/GoogleSheetsRowRepository';
+import { SheetOrderQueue } from '../../queue/sheet/SheetOrderQueue';
 import { GetSheetOrderService } from '../../services/sheet/GetSheetOrderService';
 import { ListCostosOperacionesRowsService } from '../../services/sheet/costosOperaciones/ListCostosOperacionesRowsService';
 import { ProcessSheetOrderService } from '../../services/sheet/ProcessSheetOrderService';
@@ -23,6 +24,7 @@ import { PlanillaControlRepository } from '../../../core/drivers/repositories/ma
     GetSheetOrderService,
     ListCostosOperacionesRowsService,
     ProcessSheetOrderService,
+    SheetOrderQueue,
     UpsertSheetRowService,
     {
       provide: PLANILLA_CONTROL_REPOSITORY,

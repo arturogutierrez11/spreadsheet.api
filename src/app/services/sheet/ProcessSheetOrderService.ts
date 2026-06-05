@@ -1,18 +1,12 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import {
-  IPlanillaControlRepository,
-  PLANILLA_CONTROL_REPOSITORY,
-} from '../../../core/adapters/repositories/madre-api/IPlanillaControlRepository';
-import {
-  IUpsertSheetRowRepository,
-  UPSERT_SHEET_ROW_REPOSITORY,
-} from '../../../core/adapters/repositories/sheet/IUpsertSheetRowRepository';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   SheetCellValue,
   SheetRowData,
-  SheetRowUpsertResult,
 } from '../../../core/entities/sheet/SheetRow';
-import { ProcessSheetOrderInteractor } from '../../../core/interactor/sheet/ProcessSheetOrderInteractor';
+import {
+  SheetOrderQueue,
+  SheetOrderQueuedResult,
+} from '../../queue/sheet/SheetOrderQueue';
 
 type SheetOrderBody = Record<string, unknown>;
 
@@ -59,14 +53,9 @@ export class ProcessSheetOrderService {
     '33',
   ]);
 
-  constructor(
-    @Inject(UPSERT_SHEET_ROW_REPOSITORY)
-    private readonly sheetRowRepository: IUpsertSheetRowRepository,
-    @Inject(PLANILLA_CONTROL_REPOSITORY)
-    private readonly planillaControlRepository: IPlanillaControlRepository,
-  ) {}
+  constructor(private readonly sheetOrderQueue: SheetOrderQueue) {}
 
-  async execute(body: SheetOrderBody): Promise<SheetRowUpsertResult> {
+  async execute(body: SheetOrderBody): Promise<SheetOrderQueuedResult> {
     const sheetName = this.optionalString(body.sheetName);
     const data = this.toSheetRowData(body);
     if (!data.Identificador) {
@@ -75,12 +64,7 @@ export class ProcessSheetOrderService {
       );
     }
 
-    const interactor = new ProcessSheetOrderInteractor(
-      this.sheetRowRepository,
-      this.planillaControlRepository,
-    );
-
-    return interactor.execute({
+    return this.sheetOrderQueue.enqueue({
       sheetName,
       data,
     });
