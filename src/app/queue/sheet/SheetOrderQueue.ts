@@ -50,6 +50,14 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    this.initializeQueue();
+  }
+
+  private initializeQueue(): void {
+    if (this.queue && this.worker) {
+      return;
+    }
+
     const connection = this.redisConnectionOptions();
 
     this.queue = new Queue<SheetOrderJobData, SheetRowUpsertResult, string>(
@@ -113,11 +121,9 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
   }
 
   getQueue(): Queue<SheetOrderJobData, SheetRowUpsertResult, string> {
-    if (!this.queue) {
-      throw new Error('Sheet order queue is not initialized.');
-    }
+    this.initializeQueue();
 
-    return this.queue;
+    return this.queue as Queue<SheetOrderJobData, SheetRowUpsertResult, string>;
   }
 
   private process(
