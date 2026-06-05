@@ -256,4 +256,15 @@ SHEET_ORDER_QUEUE_RATE_LIMIT_DURATION_MS=1000
 SHEET_ORDER_QUEUE_ATTEMPTS=5
 SHEET_ORDER_QUEUE_BACKOFF_MS=5000
 ```
+
+Panel de monitoreo de la cola:
+
+```env
+BULL_BOARD_ENABLED=true
+BULL_BOARD_PATH=/admin/queues
+BULL_BOARD_USERNAME=admin
+BULL_BOARD_PASSWORD=change-me
+```
+
+Con eso queda disponible en `/admin/queues` y pide usuario/password por Basic Auth.
 # spreadsheet.api

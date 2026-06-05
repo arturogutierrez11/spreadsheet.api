@@ -112,6 +112,14 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  getQueue(): Queue<SheetOrderJobData, SheetRowUpsertResult, string> {
+    if (!this.queue) {
+      throw new Error('Sheet order queue is not initialized.');
+    }
+
+    return this.queue;
+  }
+
   private process(
     job: Job<SheetOrderJobData, SheetRowUpsertResult, string>,
   ): Promise<SheetRowUpsertResult> {
