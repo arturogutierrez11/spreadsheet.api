@@ -32,7 +32,6 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     'Transaccion ID',
     'Transacciones ID',
     'Notificacion de Amz',
-    'ESTADO MERCADOLIBRE',
     'NROGUIAMADRE',
     'ETABUE',
     'ALERTA ETA',
