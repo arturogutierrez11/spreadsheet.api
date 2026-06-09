@@ -9,6 +9,10 @@ export interface SheetRowUpsert {
   data: SheetRowData;
 }
 
+export interface SheetRowUpdate extends SheetRowUpsert {
+  protectionIdentifier: SheetCellValue;
+}
+
 export interface SheetRowAppend {
   sheetName?: string;
   data: SheetRowData;

@@ -10,6 +10,7 @@ import {
   SheetRowFound,
   SheetRowUpsert,
   SheetRowUpsertResult,
+  SheetRowUpdate,
 } from '../../../core/entities/sheet/SheetRow';
 
 interface CacheEntry<T> {
@@ -164,6 +165,42 @@ export class GoogleSheetsRowRepository implements IUpsertSheetRowRepository {
     }
 
     return this.append({ sheetName, data: input.data });
+  }
+
+  async update(
+    input: SheetRowUpdate,
+  ): Promise<SheetRowUpsertResult | null> {
+    const sheetName = input.sheetName ?? this.defaultSheetName;
+    const escapedSheetName = this.escapeSheetName(sheetName);
+    const headers = await this.getHeaders(escapedSheetName);
+    const rowNumber = await this.findRowNumberByColumn(
+      escapedSheetName,
+      headers,
+      input.keyColumn,
+      input.keyValue,
+    );
+
+    if (!rowNumber) {
+      return null;
+    }
+
+    const updateRanges = this.mapDataToUpdateRanges(
+      escapedSheetName,
+      rowNumber,
+      headers,
+      input.data,
+      input.protectionIdentifier,
+    );
+
+    if (updateRanges.length > 0) {
+      await this.batchUpdateValues(updateRanges);
+    }
+
+    this.logPurple(
+      `Google Sheets write updated ${input.keyColumn}=${this.normalizeCell(input.keyValue)} row=${rowNumber} cells=${updateRanges.length}`,
+    );
+
+    return { action: 'updated', rowNumber };
   }
 
   private async getHeaders(sheetName: string): Promise<string[]> {

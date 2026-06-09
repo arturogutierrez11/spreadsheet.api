@@ -58,9 +58,9 @@ export class ProcessSheetOrderService {
   async execute(body: SheetOrderBody): Promise<SheetOrderQueuedResult> {
     const sheetName = this.optionalString(body.sheetName);
     const data = this.toSheetRowData(body);
-    if (!data.Identificador) {
+    if (!this.hasValue(data.Identificador) && !this.hasValue(data.NROVENTA)) {
       throw new BadRequestException(
-        'Identificador is required to insert or update an order.',
+        'Identificador or NROVENTA is required to process an order.',
       );
     }
 
@@ -115,5 +115,9 @@ export class ProcessSheetOrderService {
     }
 
     return value.trim();
+  }
+
+  private hasValue(value: SheetCellValue | undefined): boolean {
+    return value !== undefined && value !== null && String(value).trim() !== '';
   }
 }

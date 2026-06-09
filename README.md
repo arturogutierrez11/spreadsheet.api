@@ -134,12 +134,14 @@ curl --location 'http://localhost:3000/sheet/orders' \
 
 Funcionamiento:
 
-- El campo `Identificador` es obligatorio.
+- Se puede identificar la fila por `Identificador` o por `NROVENTA`.
 - El endpoint responde `202` cuando el job queda encolado.
 - El worker procesa la cola con concurrencia `1` por defecto.
 - El rate limit por defecto procesa como maximo `1` job cada `1000ms`.
 - Si el `Identificador` ya existe, el worker actualiza solo las columnas enviadas y conserva el resto de la fila.
 - Si el `Identificador` no existe, el worker inserta una nueva fila.
+- Si el body no trae `Identificador` y trae `NROVENTA`, busca una coincidencia exacta y solo actualiza esa fila.
+- `NROVENTA` nunca inserta filas nuevas. Si no existe, el job falla sin reintentos.
 - Si el body trae `modo` por compatibilidad con el proceso viejo, la API lo ignora.
 
 Respuesta:

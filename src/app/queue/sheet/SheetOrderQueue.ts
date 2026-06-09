@@ -6,7 +6,14 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ConnectionOptions, Job, JobsOptions, Queue, Worker } from 'bullmq';
+import {
+  ConnectionOptions,
+  Job,
+  JobsOptions,
+  Queue,
+  UnrecoverableError,
+  Worker,
+} from 'bullmq';
 import {
   IPlanillaControlRepository,
   PLANILLA_CONTROL_REPOSITORY,
@@ -19,6 +26,7 @@ import {
   SheetRowData,
   SheetRowUpsertResult,
 } from '../../../core/entities/sheet/SheetRow';
+import { SheetOrderNotFoundError } from '../../../core/errors/SheetOrderNotFoundError';
 import { ProcessSheetOrderInteractor } from '../../../core/interactor/sheet/ProcessSheetOrderInteractor';
 
 export interface SheetOrderJobData {
@@ -87,12 +95,12 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
 
     this.worker.on('completed', (job, result) => {
       this.logPurple(
-        `Sheet order job completed jobId=${job.id ?? ''} identificador=${this.identificador(job.data)} action=${result.action} row=${result.rowNumber}`,
+        `Sheet order job completed jobId=${job.id ?? ''} selector=${this.selector(job.data)} action=${result.action} row=${result.rowNumber}`,
       );
     });
     this.worker.on('failed', (job, error) => {
       this.logger.error(
-        `Sheet order job failed jobId=${job?.id ?? ''} identificador=${job ? this.identificador(job.data) : ''}: ${error.message}`,
+        `Sheet order job failed jobId=${job?.id ?? ''} selector=${job ? this.selector(job.data) : ''}: ${error.message}`,
         error.stack,
       );
     });
@@ -111,7 +119,7 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
     const job = await this.queue.add('upsert-sheet-order', data, this.jobOptions());
 
     this.logPurple(
-      `Sheet order job queued jobId=${job.id ?? ''} identificador=${this.identificador(data)}`,
+      `Sheet order job queued jobId=${job.id ?? ''} selector=${this.selector(data)}`,
     );
 
     return {
@@ -126,11 +134,11 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
     return this.queue as Queue<SheetOrderJobData, SheetRowUpsertResult, string>;
   }
 
-  private process(
+  private async process(
     job: Job<SheetOrderJobData, SheetRowUpsertResult, string>,
   ): Promise<SheetRowUpsertResult> {
     this.logPurple(
-      `Sheet order job processing jobId=${job.id ?? ''} identificador=${this.identificador(job.data)} attempt=${job.attemptsMade + 1}`,
+      `Sheet order job processing jobId=${job.id ?? ''} selector=${this.selector(job.data)} attempt=${job.attemptsMade + 1}`,
     );
 
     const interactor = new ProcessSheetOrderInteractor(
@@ -138,7 +146,15 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
       this.planillaControlRepository,
     );
 
-    return interactor.execute(job.data);
+    try {
+      return await interactor.execute(job.data);
+    } catch (error) {
+      if (error instanceof SheetOrderNotFoundError) {
+        throw new UnrecoverableError(error.message);
+      }
+
+      throw error;
+    }
   }
 
   private redisConnectionOptions(): ConnectionOptions {
@@ -182,8 +198,14 @@ export class SheetOrderQueue implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  private identificador(data: SheetOrderJobData): string {
-    return String(data.data.Identificador ?? '').trim();
+  private selector(data: SheetOrderJobData): string {
+    const identifier = String(data.data.Identificador ?? '').trim();
+
+    if (identifier) {
+      return `Identificador=${identifier}`;
+    }
+
+    return `NROVENTA=${String(data.data.NROVENTA ?? '').trim()}`;
   }
 
   private logPurple(message: string): void {
