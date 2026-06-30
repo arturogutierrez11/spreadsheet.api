@@ -116,6 +116,27 @@ COSTOS_OPERACIONES_SHEET_NAME=Costos Operaciones
 
 `page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
 
+### Planilla Control
+
+`GET /sheet/planilla-control/MADRE`
+
+`GET /sheet/planilla-control/TLQV`
+
+Obtiene filas del spreadsheet de Planilla Control, con paginado. Solo acepta las solapas `MADRE` y `TLQV`.
+
+```bash
+curl 'http://localhost:3000/sheet/planilla-control/MADRE?page=1&pageSize=100'
+curl 'http://localhost:3000/sheet/planilla-control/TLQV?page=1&pageSize=100'
+```
+
+Variable:
+
+```env
+PLANILLA_CONTROL_SPREADSHEET_ID=1b8qGXC38RE9zTE310ZzI_XZqp1z_XXDqv3Dc1OX6JrY
+```
+
+`page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
+
 ### Floxus form-urlencoded
 
 `POST /sheet/orders`
