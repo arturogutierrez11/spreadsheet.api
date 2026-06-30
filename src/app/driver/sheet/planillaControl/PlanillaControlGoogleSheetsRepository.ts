@@ -33,8 +33,11 @@ export class PlanillaControlGoogleSheetsRepository
 
   constructor(private readonly configService: ConfigService) {
     this.spreadsheetId = this.configService.get<string>(
-      'PLANILLA_CONTROL_SPREADSHEET_ID',
-      this.defaultSpreadsheetId,
+      'PRUEBA_LECTURA_SPREADSHEET_ID',
+      this.configService.get<string>(
+        'PLANILLA_CONTROL_SPREADSHEET_ID',
+        this.defaultSpreadsheetId,
+      ),
     );
 
     const auth = new google.auth.GoogleAuth({

@@ -13,7 +13,7 @@ import {
   PlanillaControlSheetName,
 } from '../../../../core/entities/sheet/PlanillaControlSheetRow';
 
-@Controller('sheet/planilla-control')
+@Controller('sheet/prueba-lectura')
 export class PlanillaControlController {
   private readonly allowedSheetNames = new Set<PlanillaControlSheetName>([
     'MADRE',

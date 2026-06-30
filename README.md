@@ -116,24 +116,24 @@ COSTOS_OPERACIONES_SHEET_NAME=Costos Operaciones
 
 `page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
 
-### Planilla Control
+### Prueba de Lectura
 
-`GET /sheet/planilla-control/MADRE`
+`GET /sheet/prueba-lectura/MADRE`
 
-`GET /sheet/planilla-control/TLQV`
+`GET /sheet/prueba-lectura/TLQV`
 
-Obtiene filas del spreadsheet de Planilla Control, con paginado. Solo acepta las solapas `MADRE` y `TLQV`.
+Obtiene filas del spreadsheet de Prueba de Lectura, con paginado. Solo acepta las solapas `MADRE` y `TLQV`.
 
 ```bash
-curl 'http://localhost:3000/sheet/planilla-control/MADRE?page=1&pageSize=100'
-curl 'http://localhost:3000/sheet/planilla-control/TLQV?page=1&pageSize=100'
+curl 'http://localhost:3000/sheet/prueba-lectura/MADRE?page=1&pageSize=100'
+curl 'http://localhost:3000/sheet/prueba-lectura/TLQV?page=1&pageSize=100'
 ```
 
 Tambien permite buscar una fila por ID:
 
 ```bash
-curl 'http://localhost:3000/sheet/planilla-control/TLQV/TLQV-1569'
-curl 'http://localhost:3000/sheet/planilla-control/MADRE/TLQV-1569'
+curl 'http://localhost:3000/sheet/prueba-lectura/TLQV/TLQV-1569'
+curl 'http://localhost:3000/sheet/prueba-lectura/MADRE/TLQV-1569'
 ```
 
 Para `TLQV`, busca por la columna `TLQV`. Para `MADRE`, busca por la columna `Identificador`.
@@ -141,7 +141,7 @@ Para `TLQV`, busca por la columna `TLQV`. Para `MADRE`, busca por la columna `Id
 Variable:
 
 ```env
-PLANILLA_CONTROL_SPREADSHEET_ID=1b8qGXC38RE9zTE310ZzI_XZqp1z_XXDqv3Dc1OX6JrY
+PRUEBA_LECTURA_SPREADSHEET_ID=1b8qGXC38RE9zTE310ZzI_XZqp1z_XXDqv3Dc1OX6JrY
 ```
 
 `page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
