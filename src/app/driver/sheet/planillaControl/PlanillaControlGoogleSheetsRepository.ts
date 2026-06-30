@@ -4,10 +4,18 @@ import { google, sheets_v4 } from 'googleapis';
 import { IPlanillaControlSheetRepository } from '../../../../core/adapters/repositories/sheet/IPlanillaControlSheetRepository';
 import {
   PlanillaControlCellValue,
+  PlanillaControlRowFindByIdInput,
+  PlanillaControlRowFound,
   PlanillaControlRowsPage,
   PlanillaControlRowsPageInput,
+  PlanillaControlSheetName,
 } from '../../../../core/entities/sheet/PlanillaControlSheetRow';
 import { SheetRowData } from '../../../../core/entities/sheet/SheetRow';
+
+interface PlanillaControlSheetData {
+  headers: string[];
+  rows: PlanillaControlRowFound[];
+}
 
 @Injectable()
 export class PlanillaControlGoogleSheetsRepository
@@ -45,27 +53,7 @@ export class PlanillaControlGoogleSheetsRepository
       input.pageSize ?? this.defaultPageSize,
       this.maxPageSize,
     );
-    const response = await this.withGoogleSheetsRetry(() =>
-      this.sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range: `${this.escapeSheetName(input.sheetName)}!A:ZZ`,
-      }, {
-        timeout: this.googleRequestTimeoutMs,
-      }),
-    );
-    const values = (response.data.values ?? []) as PlanillaControlCellValue[][];
-    const headers = values[0]?.map((value) => String(value).trim()) ?? [];
-
-    if (headers.length === 0) {
-      throw new BadRequestException(
-        `${input.sheetName} sheet must have headers in the first row.`,
-      );
-    }
-
-    const rows = values.slice(1).map((row, index) => ({
-      rowNumber: index + 2,
-      data: this.mapRowToData(headers, row),
-    }));
+    const { rows } = await this.readSheetData(input.sheetName);
     const totalRows = rows.length;
     const totalPages = Math.ceil(totalRows / pageSize);
     const startIndex = (page - 1) * pageSize;
@@ -79,6 +67,59 @@ export class PlanillaControlGoogleSheetsRepository
       hasNextPage: page < totalPages,
       hasPreviousPage: page > 1 && totalPages > 0,
       rows: rows.slice(startIndex, startIndex + pageSize),
+    };
+  }
+
+  async findById(
+    input: PlanillaControlRowFindByIdInput,
+  ): Promise<PlanillaControlRowFound | null> {
+    const { headers, rows } = await this.readSheetData(input.sheetName);
+    const keyColumn = this.idColumnForSheet(input.sheetName);
+    const keyColumnIndex = headers.indexOf(keyColumn);
+
+    if (keyColumnIndex === -1) {
+      throw new BadRequestException(
+        `${input.sheetName} sheet must have "${keyColumn}" header.`,
+      );
+    }
+
+    const normalizedId = this.normalizeCell(input.id);
+
+    return (
+      rows.find((row) => {
+        const rowValue = row.data[keyColumn];
+
+        return this.normalizeCell(rowValue) === normalizedId;
+      }) ?? null
+    );
+  }
+
+  private async readSheetData(
+    sheetName: PlanillaControlSheetName,
+  ): Promise<PlanillaControlSheetData> {
+    const response = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range: `${this.escapeSheetName(sheetName)}!A:ZZ`,
+      }, {
+        timeout: this.googleRequestTimeoutMs,
+      }),
+    );
+    const values = (response.data.values ?? []) as PlanillaControlCellValue[][];
+    const headers = values[0]?.map((value) => String(value).trim()) ?? [];
+
+    if (headers.length === 0) {
+      throw new BadRequestException(
+        `${sheetName} sheet must have headers in the first row.`,
+      );
+    }
+
+    return {
+      headers,
+      rows: values.slice(1).map((row, index) => ({
+        rowNumber: index + 2,
+        data: this.mapRowToData(headers, row),
+      })),
     };
   }
 
@@ -186,5 +227,17 @@ export class PlanillaControlGoogleSheetsRepository
 
   private escapeSheetName(sheetName: string): string {
     return `'${sheetName.replaceAll("'", "''")}'`;
+  }
+
+  private idColumnForSheet(sheetName: PlanillaControlSheetName): string {
+    if (sheetName === 'TLQV') {
+      return 'TLQV';
+    }
+
+    return 'Identificador';
+  }
+
+  private normalizeCell(value: unknown): string {
+    return String(value ?? '').trim();
   }
 }

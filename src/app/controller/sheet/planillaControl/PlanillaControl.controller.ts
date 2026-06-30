@@ -1,6 +1,14 @@
-import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { ListPlanillaControlRowsService } from '../../../services/sheet/planillaControl/ListPlanillaControlRowsService';
 import {
+  PlanillaControlRowFound,
   PlanillaControlRowsPage,
   PlanillaControlSheetName,
 } from '../../../../core/entities/sheet/PlanillaControlSheetRow';
@@ -29,6 +37,26 @@ export class PlanillaControlController {
     });
   }
 
+  @Get(':sheetName/:id')
+  async findById(
+    @Param('sheetName') sheetName: string,
+    @Param('id') id: string,
+  ): Promise<PlanillaControlRowFound> {
+    const parsedSheetName = this.parseSheetName(sheetName);
+    const row = await this.listPlanillaControlRowsService.findById({
+      sheetName: parsedSheetName,
+      id: this.parseId(id),
+    });
+
+    if (!row) {
+      throw new NotFoundException(
+        `${parsedSheetName} row was not found for id "${id}".`,
+      );
+    }
+
+    return row;
+  }
+
   private parseSheetName(sheetName: string): PlanillaControlSheetName {
     const normalizedSheetName = sheetName.trim().toUpperCase();
 
@@ -37,6 +65,16 @@ export class PlanillaControlController {
     }
 
     throw new BadRequestException('sheetName must be MADRE or TLQV.');
+  }
+
+  private parseId(id: string): string {
+    const normalizedId = id.trim();
+
+    if (normalizedId === '') {
+      throw new BadRequestException('id is required.');
+    }
+
+    return normalizedId;
   }
 
   private optionalPositiveInteger(

@@ -129,6 +129,15 @@ curl 'http://localhost:3000/sheet/planilla-control/MADRE?page=1&pageSize=100'
 curl 'http://localhost:3000/sheet/planilla-control/TLQV?page=1&pageSize=100'
 ```
 
+Tambien permite buscar una fila por ID:
+
+```bash
+curl 'http://localhost:3000/sheet/planilla-control/TLQV/TLQV-1569'
+curl 'http://localhost:3000/sheet/planilla-control/MADRE/TLQV-1569'
+```
+
+Para `TLQV`, busca por la columna `TLQV`. Para `MADRE`, busca por la columna `Identificador`.
+
 Variable:
 
 ```env

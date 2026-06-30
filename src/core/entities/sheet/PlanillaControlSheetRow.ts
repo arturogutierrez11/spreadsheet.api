@@ -8,6 +8,11 @@ export interface PlanillaControlRowsPageInput {
   sheetName: PlanillaControlSheetName;
 }
 
+export interface PlanillaControlRowFindByIdInput {
+  id: string;
+  sheetName: PlanillaControlSheetName;
+}
+
 export interface PlanillaControlRowFound {
   rowNumber: number;
   data: SheetRowData;

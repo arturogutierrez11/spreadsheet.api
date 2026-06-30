@@ -4,6 +4,8 @@ import {
   PLANILLA_CONTROL_SHEET_REPOSITORY,
 } from '../../../../core/adapters/repositories/sheet/IPlanillaControlSheetRepository';
 import {
+  PlanillaControlRowFindByIdInput,
+  PlanillaControlRowFound,
   PlanillaControlRowsPage,
   PlanillaControlRowsPageInput,
 } from '../../../../core/entities/sheet/PlanillaControlSheetRow';
@@ -17,5 +19,11 @@ export class ListPlanillaControlRowsService {
 
   execute(input: PlanillaControlRowsPageInput): Promise<PlanillaControlRowsPage> {
     return this.planillaControlSheetRepository.listRows(input);
+  }
+
+  findById(
+    input: PlanillaControlRowFindByIdInput,
+  ): Promise<PlanillaControlRowFound | null> {
+    return this.planillaControlSheetRepository.findById(input);
   }
 }
