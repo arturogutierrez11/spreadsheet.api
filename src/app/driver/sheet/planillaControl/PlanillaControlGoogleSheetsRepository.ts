@@ -25,6 +25,8 @@ export class PlanillaControlGoogleSheetsRepository
     '1b8qGXC38RE9zTE310ZzI_XZqp1z_XXDqv3Dc1OX6JrY';
   private readonly sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
+  private readonly madreSheetName: string;
+  private readonly tlqvSheetName: string;
   private readonly googleRequestTimeoutMs = 30000;
   private readonly maxGoogleApiAttempts = 4;
   private readonly defaultPage = 1;
@@ -38,6 +40,14 @@ export class PlanillaControlGoogleSheetsRepository
         'PLANILLA_CONTROL_SPREADSHEET_ID',
         this.defaultSpreadsheetId,
       ),
+    );
+    this.madreSheetName = this.configService.get<string>(
+      'PRUEBA_LECTURA_MADRE_SHEET_NAME',
+      'MADRE',
+    );
+    this.tlqvSheetName = this.configService.get<string>(
+      'PRUEBA_LECTURA_TLQV_SHEET_NAME',
+      'TLQV',
     );
 
     const auth = new google.auth.GoogleAuth({
@@ -100,10 +110,11 @@ export class PlanillaControlGoogleSheetsRepository
   private async readSheetData(
     sheetName: PlanillaControlSheetName,
   ): Promise<PlanillaControlSheetData> {
+    const configuredSheetName = this.configuredSheetName(sheetName);
     const response = await this.withGoogleSheetsRetry(() =>
       this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.escapeSheetName(sheetName)}!A:ZZ`,
+        range: `${this.escapeSheetName(configuredSheetName)}!A:ZZ`,
       }, {
         timeout: this.googleRequestTimeoutMs,
       }),
@@ -230,6 +241,14 @@ export class PlanillaControlGoogleSheetsRepository
 
   private escapeSheetName(sheetName: string): string {
     return `'${sheetName.replaceAll("'", "''")}'`;
+  }
+
+  private configuredSheetName(sheetName: PlanillaControlSheetName): string {
+    if (sheetName === 'TLQV') {
+      return this.tlqvSheetName;
+    }
+
+    return this.madreSheetName;
   }
 
   private idColumnForSheet(sheetName: PlanillaControlSheetName): string {

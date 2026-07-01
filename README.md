@@ -142,6 +142,8 @@ Variable:
 
 ```env
 PRUEBA_LECTURA_SPREADSHEET_ID=1b8qGXC38RE9zTE310ZzI_XZqp1z_XXDqv3Dc1OX6JrY
+PRUEBA_LECTURA_MADRE_SHEET_NAME=MADRE
+PRUEBA_LECTURA_TLQV_SHEET_NAME=TLQV
 ```
 
 `page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
