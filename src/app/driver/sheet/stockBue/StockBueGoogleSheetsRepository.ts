@@ -65,7 +65,8 @@ export class StockBueGoogleSheetsRepository implements IStockBueSheetRepository 
       );
     }
 
-    const rows = values.slice(1).map((row, index) => ({
+    const dataRows = this.rowsUntilFirstEmpty(values.slice(1));
+    const rows = dataRows.map((row, index) => ({
       rowNumber: index + 2,
       data: this.mapRowToData(headers, row),
     }));
@@ -92,6 +93,39 @@ export class StockBueGoogleSheetsRepository implements IStockBueSheetRepository 
       data[header] = row[index] ?? '';
       return data;
     }, {});
+  }
+
+  private rowsUntilFirstEmpty(
+    rows: StockBueCellValue[][],
+  ): StockBueCellValue[][] {
+    const firstEmptyRowIndex = rows.findIndex((row) =>
+      this.isEffectivelyEmptyRow(row),
+    );
+
+    if (firstEmptyRowIndex === -1) {
+      return rows;
+    }
+
+    return rows.slice(0, firstEmptyRowIndex);
+  }
+
+  private isEffectivelyEmptyRow(row: StockBueCellValue[]): boolean {
+    return row.every((value) => this.isEmptyCellValue(value));
+  }
+
+  private isEmptyCellValue(value: StockBueCellValue | undefined): boolean {
+    const normalizedValue = String(value ?? '').trim();
+
+    return (
+      normalizedValue === '' ||
+      normalizedValue === '#N/A' ||
+      normalizedValue === '#VALUE!' ||
+      normalizedValue === '#REF!' ||
+      normalizedValue === '#DIV/0!' ||
+      normalizedValue === '#NAME?' ||
+      normalizedValue === '#NUM!' ||
+      normalizedValue === '#ERROR!'
+    );
   }
 
   private getEnvCredentials():

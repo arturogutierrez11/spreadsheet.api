@@ -166,6 +166,7 @@ STOCK_BUE_SHEET_NAME=STOCK BUE
 ```
 
 `page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
+El paginado corta en la primera fila sin datos reales; filas con celdas vacias o errores de formula como `#N/A` no cuentan como stock.
 
 ### Floxus form-urlencoded
 
