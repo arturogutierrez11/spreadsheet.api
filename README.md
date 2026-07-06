@@ -148,6 +148,25 @@ PRUEBA_LECTURA_TLQV_SHEET_NAME=TLQV
 
 `page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
 
+### Stock BUE
+
+`GET /sheet/stock-bue`
+
+Obtiene filas de la solapa `STOCK BUE`, con paginado.
+
+```bash
+curl 'http://localhost:3000/sheet/stock-bue?page=1&pageSize=100'
+```
+
+Variables:
+
+```env
+STOCK_BUE_SPREADSHEET_ID=1MQeZVdIz1Q6PnJewfBBl0Z7DX3w3g6Wzaw7xjf7j9Ag
+STOCK_BUE_SHEET_NAME=STOCK BUE
+```
+
+`page` empieza en `1`. `pageSize` usa `100` por defecto y tiene un maximo de `500`.
+
 ### Floxus form-urlencoded
 
 `POST /sheet/orders`
