@@ -4,6 +4,7 @@ import { google, sheets_v4 } from 'googleapis';
 import { IStockBueSheetRepository } from '../../../../core/adapters/repositories/sheet/IStockBueSheetRepository';
 import {
   StockBueCellValue,
+  StockBueRowFound,
   StockBueRowsPage,
   StockBueRowsPageInput,
 } from '../../../../core/entities/sheet/StockBueSheetRow';
@@ -48,24 +49,8 @@ export class StockBueGoogleSheetsRepository implements IStockBueSheetRepository 
       input.pageSize ?? this.defaultPageSize,
       this.maxPageSize,
     );
-    const response = await this.withGoogleSheetsRetry(() =>
-      this.sheets.spreadsheets.values.get({
-        spreadsheetId: this.spreadsheetId,
-        range: `${this.escapeSheetName(this.sheetName)}!A:ZZ`,
-      }, {
-        timeout: this.googleRequestTimeoutMs,
-      }),
-    );
-    const values = (response.data.values ?? []) as StockBueCellValue[][];
-    const headers = values[0]?.map((value) => String(value).trim()) ?? [];
+    const { headers, rows: dataRows } = await this.readSheetData();
 
-    if (headers.length === 0) {
-      throw new BadRequestException(
-        'STOCK BUE sheet must have headers in the first row.',
-      );
-    }
-
-    const dataRows = this.rowsUntilFirstEmpty(values.slice(1));
     const rows = dataRows.map((row, index) => ({
       rowNumber: index + 2,
       data: this.mapRowToData(headers, row),
@@ -82,6 +67,65 @@ export class StockBueGoogleSheetsRepository implements IStockBueSheetRepository 
       hasNextPage: page < totalPages,
       hasPreviousPage: page > 1 && totalPages > 0,
       rows: rows.slice(startIndex, startIndex + pageSize),
+    };
+  }
+
+  async findByTlqv(tlqv: string): Promise<StockBueRowFound | null> {
+    const { headers, rows } = await this.readSheetData();
+    const tlqvColumnIndex = headers.findIndex(
+      (header) => header.toUpperCase() === 'TLQV',
+    );
+
+    if (tlqvColumnIndex === -1) {
+      throw new BadRequestException(
+        'STOCK BUE sheet must have a "TLQV" header.',
+      );
+    }
+
+    const normalizedTlqv = tlqv.trim().toUpperCase();
+    const rowIndex = rows.findIndex(
+      (row) =>
+        String(row[tlqvColumnIndex] ?? '').trim().toUpperCase() ===
+        normalizedTlqv,
+    );
+
+    if (rowIndex === -1) {
+      return null;
+    }
+
+    return {
+      rowNumber: rowIndex + 2,
+      data: this.mapRowToData(headers, rows[rowIndex]),
+    };
+  }
+
+  private async readSheetData(): Promise<{
+    headers: string[];
+    rows: StockBueCellValue[][];
+  }> {
+    const response = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.get(
+        {
+          spreadsheetId: this.spreadsheetId,
+          range: `${this.escapeSheetName(this.sheetName)}!A:ZZ`,
+        },
+        {
+          timeout: this.googleRequestTimeoutMs,
+        },
+      ),
+    );
+    const values = (response.data.values ?? []) as StockBueCellValue[][];
+    const headers = values[0]?.map((value) => String(value).trim()) ?? [];
+
+    if (headers.length === 0) {
+      throw new BadRequestException(
+        'STOCK BUE sheet must have headers in the first row.',
+      );
+    }
+
+    return {
+      headers,
+      rows: this.rowsUntilFirstEmpty(values.slice(1)),
     };
   }
 

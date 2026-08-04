@@ -1,6 +1,16 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { ListStockBueRowsService } from '../../../services/sheet/stockBue/ListStockBueRowsService';
-import { StockBueRowsPage } from '../../../../core/entities/sheet/StockBueSheetRow';
+import {
+  StockBueRowFound,
+  StockBueRowsPage,
+} from '../../../../core/entities/sheet/StockBueSheetRow';
 
 @Controller('sheet/stock-bue')
 export class StockBueController {
@@ -15,6 +25,25 @@ export class StockBueController {
       page: this.optionalPositiveInteger(page, 'page'),
       pageSize: this.optionalPositiveInteger(pageSize, 'pageSize'),
     });
+  }
+
+  @Get(':tlqv')
+  async findByTlqv(@Param('tlqv') tlqv: string): Promise<StockBueRowFound> {
+    const normalizedTlqv = tlqv.trim();
+
+    if (normalizedTlqv === '') {
+      throw new BadRequestException('tlqv is required.');
+    }
+
+    const row = await this.listStockBueRowsService.findByTlqv(normalizedTlqv);
+
+    if (!row) {
+      throw new NotFoundException(
+        `STOCK BUE row was not found for TLQV "${normalizedTlqv}".`,
+      );
+    }
+
+    return row;
   }
 
   private optionalPositiveInteger(

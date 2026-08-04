@@ -152,11 +152,21 @@ PRUEBA_LECTURA_TLQV_SHEET_NAME=TLQV
 
 `GET /sheet/stock-bue`
 
+`GET /sheet/stock-bue/:tlqv`
+
 Obtiene filas de la solapa `STOCK BUE`, con paginado.
 
 ```bash
 curl 'http://localhost:3000/sheet/stock-bue?page=1&pageSize=100'
 ```
+
+Tambien permite obtener una sola fila por el valor de la columna `TLQV`:
+
+```bash
+curl 'http://localhost:3000/sheet/stock-bue/TLQV-15239'
+```
+
+Si el TLQV no existe, responde con estado `404`.
 
 Variables:
 

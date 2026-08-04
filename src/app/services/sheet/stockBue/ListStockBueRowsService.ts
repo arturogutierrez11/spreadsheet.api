@@ -4,6 +4,7 @@ import {
   STOCK_BUE_SHEET_REPOSITORY,
 } from '../../../../core/adapters/repositories/sheet/IStockBueSheetRepository';
 import {
+  StockBueRowFound,
   StockBueRowsPage,
   StockBueRowsPageInput,
 } from '../../../../core/entities/sheet/StockBueSheetRow';
@@ -17,5 +18,9 @@ export class ListStockBueRowsService {
 
   execute(input?: StockBueRowsPageInput): Promise<StockBueRowsPage> {
     return this.stockBueSheetRepository.listRows(input);
+  }
+
+  findByTlqv(tlqv: string): Promise<StockBueRowFound | null> {
+    return this.stockBueSheetRepository.findByTlqv(tlqv);
   }
 }
