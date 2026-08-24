@@ -79,11 +79,22 @@ npm run start:dev
 
 `GET /sheet/costos-operaciones`
 
+`GET /sheet/costos-operaciones/:tlqv`
+
 Obtiene filas de la solapa configurada en `COSTOS_OPERACIONES_SHEET_NAME`, con paginado.
 
 ```bash
 curl 'http://localhost:3000/sheet/costos-operaciones?page=1&pageSize=100'
 ```
+
+Para obtener una sola fila por coincidencia exacta del TLQV en la columna A
+(`OPERACIÓN`):
+
+```bash
+curl 'http://localhost:3000/sheet/costos-operaciones/TLQV-17767'
+```
+
+Devuelve la fila completa. Si el TLQV no existe, responde con estado `404`.
 
 Respuesta:
 

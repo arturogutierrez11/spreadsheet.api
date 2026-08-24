@@ -1,4 +1,5 @@
 import {
+  CostosOperacionesRowFound,
   CostosOperacionesRowsPage,
   CostosOperacionesRowsPageInput,
 } from '../../../entities/sheet/CostosOperacionesSheetRow';
@@ -11,4 +12,5 @@ export interface ICostosOperacionesSheetRepository {
   listRows(
     input?: CostosOperacionesRowsPageInput,
   ): Promise<CostosOperacionesRowsPage>;
+  findByTlqv(tlqv: string): Promise<CostosOperacionesRowFound | null>;
 }

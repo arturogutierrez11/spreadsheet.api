@@ -1,6 +1,16 @@
-import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { ListCostosOperacionesRowsService } from '../../../services/sheet/costosOperaciones/ListCostosOperacionesRowsService';
-import { CostosOperacionesRowsPage } from '../../../../core/entities/sheet/CostosOperacionesSheetRow';
+import {
+  CostosOperacionesRowFound,
+  CostosOperacionesRowsPage,
+} from '../../../../core/entities/sheet/CostosOperacionesSheetRow';
 
 @Controller('sheet/costos-operaciones')
 export class CostosOperacionesController {
@@ -17,6 +27,28 @@ export class CostosOperacionesController {
       page: this.optionalPositiveInteger(page, 'page'),
       pageSize: this.optionalPositiveInteger(pageSize, 'pageSize'),
     });
+  }
+
+  @Get(':tlqv')
+  async findByTlqv(
+    @Param('tlqv') tlqv: string,
+  ): Promise<CostosOperacionesRowFound> {
+    const normalizedTlqv = tlqv.trim();
+
+    if (normalizedTlqv === '') {
+      throw new BadRequestException('tlqv is required.');
+    }
+
+    const row =
+      await this.listCostosOperacionesRowsService.findByTlqv(normalizedTlqv);
+
+    if (!row) {
+      throw new NotFoundException(
+        `Costos Operaciones row was not found for TLQV "${normalizedTlqv}".`,
+      );
+    }
+
+    return row;
   }
 
   private optionalPositiveInteger(

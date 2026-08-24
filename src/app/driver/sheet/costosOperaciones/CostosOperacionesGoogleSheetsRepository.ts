@@ -4,6 +4,7 @@ import { google, sheets_v4 } from 'googleapis';
 import { ICostosOperacionesSheetRepository } from '../../../../core/adapters/repositories/sheet/ICostosOperacionesSheetRepository';
 import {
   CostosOperacionesCellValue,
+  CostosOperacionesRowFound,
   CostosOperacionesRowsPage,
   CostosOperacionesRowsPageInput,
 } from '../../../../core/entities/sheet/CostosOperacionesSheetRow';
@@ -77,6 +78,72 @@ export class CostosOperacionesGoogleSheetsRepository
       hasNextPage: page < totalPages,
       hasPreviousPage: page > 1 && totalPages > 0,
       rows: rows.slice(startIndex, startIndex + pageSize),
+    };
+  }
+
+  async findByTlqv(
+    tlqv: string,
+  ): Promise<CostosOperacionesRowFound | null> {
+    const escapedSheetName = this.escapeSheetName(this.sheetName);
+    const [headersResponse, tlqvColumnResponse] = await Promise.all([
+      this.withGoogleSheetsRetry(() =>
+        this.sheets.spreadsheets.values.get(
+          {
+            spreadsheetId: this.spreadsheetId,
+            range: `${escapedSheetName}!A1:ZZ1`,
+          },
+          { timeout: this.googleRequestTimeoutMs },
+        ),
+      ),
+      this.withGoogleSheetsRetry(() =>
+        this.sheets.spreadsheets.values.get(
+          {
+            spreadsheetId: this.spreadsheetId,
+            range: `${escapedSheetName}!A2:A`,
+          },
+          { timeout: this.googleRequestTimeoutMs },
+        ),
+      ),
+    ]);
+    const headers = (
+      (headersResponse.data.values ?? [])[0] as
+        | CostosOperacionesCellValue[]
+        | undefined
+    )?.map((value) => String(value).trim()) ?? [];
+
+    if (headers.length === 0) {
+      throw new BadRequestException(
+        'Costos Operaciones sheet must have headers in the first row.',
+      );
+    }
+
+    const normalizedTlqv = tlqv.trim().toUpperCase();
+    const tlqvValues = (tlqvColumnResponse.data.values ?? []) as
+      CostosOperacionesCellValue[][];
+    const rowIndex = tlqvValues.findIndex(
+      (row) => String(row[0] ?? '').trim().toUpperCase() === normalizedTlqv,
+    );
+
+    if (rowIndex === -1) {
+      return null;
+    }
+
+    const rowNumber = rowIndex + 2;
+    const rowResponse = await this.withGoogleSheetsRetry(() =>
+      this.sheets.spreadsheets.values.get(
+        {
+          spreadsheetId: this.spreadsheetId,
+          range: `${escapedSheetName}!A${rowNumber}:ZZ${rowNumber}`,
+        },
+        { timeout: this.googleRequestTimeoutMs },
+      ),
+    );
+    const row = ((rowResponse.data.values ?? [])[0] ?? []) as
+      CostosOperacionesCellValue[];
+
+    return {
+      rowNumber,
+      data: this.mapRowToData(headers, row),
     };
   }
 

@@ -4,6 +4,7 @@ import {
   ICostosOperacionesSheetRepository,
 } from '../../../../core/adapters/repositories/sheet/ICostosOperacionesSheetRepository';
 import {
+  CostosOperacionesRowFound,
   CostosOperacionesRowsPage,
   CostosOperacionesRowsPageInput,
 } from '../../../../core/entities/sheet/CostosOperacionesSheetRow';
@@ -19,5 +20,9 @@ export class ListCostosOperacionesRowsService {
     input?: CostosOperacionesRowsPageInput,
   ): Promise<CostosOperacionesRowsPage> {
     return this.costosOperacionesSheetRepository.listRows(input);
+  }
+
+  findByTlqv(tlqv: string): Promise<CostosOperacionesRowFound | null> {
+    return this.costosOperacionesSheetRepository.findByTlqv(tlqv);
   }
 }
